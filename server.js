@@ -36,7 +36,7 @@ var teleg = new telegram();
 // var settings = {}
 
 // google answer 302 so its normal
-const replicatorpost = bent('POST', 'string', 302);
+const replicatorpost = bent('POST', 'string', server.replicatoranscode);
 
 // async url request 
 var requestAsync = function (url) {

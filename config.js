@@ -29,6 +29,12 @@ const profiles = [
 ];
 
 // ---------------РЕПЛИКАТОРЫ----------------------- 
+// принимаемый ответ от репликатора
+// 200 - OK
+// 302 - Found
+// Google tables отвечает 302, для других сервисов возможно надо поставить 200
+
+const replicatoranscode = 302;
 // V 1
 // /replicator
 // метод v1 реализован через replicatorurl
@@ -72,3 +78,4 @@ module.exports.replicatorurl = replicatorurl;
 module.exports.urls=urls;
 module.exports.replicator2url=replicator2url
 module.exports.rep2urls=rep2urls;
+module.exports.replicatoranscode=replicatoranscode;
