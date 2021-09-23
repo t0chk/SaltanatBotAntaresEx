@@ -1,3 +1,4 @@
+const config = require('./config.js');
 let httprequest = require('request');
 
 class telegram {
@@ -45,7 +46,7 @@ class telegram {
 
   telegramSendText2(strHeader, strText) {
     if (this.status == "вкл" && !this.mute) {
-      let now = new Date(Date.now() + 3 * 3600000);
+      let now = new Date(Date.now() + config.gmttime * 3600000);
       let strnow = now.toLocaleString("ru-RU") + `.${now.getMilliseconds()}`;
       this.textbuffer += "<b>" + strHeader + ": [" + strnow + "]</b>\n" + strText + "\n\n";
     }
@@ -77,7 +78,7 @@ class telegram {
   }
 
   telegramRequestSend2(dateStartTime, strRequestHeader, strRequest, strAnswerHeader, strAnswer, boolStripJson) {
-    let dateEndTime = new Date(Date.now() + 3 * 3600000);
+    let dateEndTime = new Date(Date.now() + config.gmttime * 3600000);
     this.telegramRequestSend(dateStartTime, strRequestHeader, strRequest, dateEndTime, strAnswerHeader, strAnswer, boolStripJson)
   }
 

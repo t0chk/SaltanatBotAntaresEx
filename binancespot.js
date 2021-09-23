@@ -1,10 +1,14 @@
+const config = require('./config.js');
 let server = require('./server');
 
 class binanceClass {
-    constructor() {
+    constructor(binanceaccidx = 0) {
         // api key 
         this.global = {}
-        this.binance = undefined
+        //this.binance = undefined
+
+        // аккаунт binance для работы
+        this.binanceaccount = server.biaccounts[binanceaccidx];
 
         this.orderId = 0
         this.priceprocdown = undefined
@@ -130,7 +134,7 @@ class binanceClass {
         this.leverageProc = 0;
 
         // аккаунт binance для работы
-        this.binanceaccount = undefined;
+        this.binanceaccount = server.biaccounts[binanceaccidx];
 
         // аккаунт телеграм для сообщений
         this.telegaccount = undefined;
@@ -863,9 +867,10 @@ class binanceClass {
     }
     // обычный режим
     async binanceStart(binanceaccidx = 0) {
-        server.dateStartRequest = new Date(Date.now() - 3 * 3600000);
+        server.dateStartRequest = new Date(Date.now() - config.gmttime * 3600000);
         this.binanceaccount = server.biaccounts[binanceaccidx];
         this.telegaccount = server.teleaccounts[binanceaccidx];
+        
         if (this.marketType == "spot") {
             this.binancefilterStartSpot();
             if (this.allClose != "false") {
@@ -898,7 +903,6 @@ class binanceClass {
         }
         // futures done
         else if (this.marketType == "futures") {
-
             if (this.typeExchange == "/dapi") {
                 this.binancefilterStartdapi();
             } else if (this.typeExchange == "/fapi") {
@@ -940,6 +944,24 @@ class binanceClass {
             }
         }
 
+    }
+    
+    binanceGetBestPrice() {
+        // расписать все маркеты!
+        switch (this.marketType) {
+            case 'futures':
+                return this.typeExchange == "/fapi" ? this.global.ticker.futures[this.pair] : this.global.ticker.futuresDapi[this.pair];
+            case 'spot':
+                return this.global.ticker.spot[this.pair];
+            case 'margin':
+                return this.global.ticker.spot[this.pair];
+
+        }
+    }
+
+    async binanceGetSymbolPrice(){
+        let prices = await this.binanceaccount.prices(this.pair);
+        return prices[this.pair];
     }
 
 }

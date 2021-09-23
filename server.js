@@ -1,3 +1,5 @@
+var nodeversion = "2.5.0";
+
 var app = require('express')();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
@@ -25,18 +27,24 @@ config.profiles.forEach((profile) => {
 		'APISECRET': profile.binancesecretkey,
 		useServerTime: true,
 		reconnect: true,
-		verbose: true
+		verbose: true,
+		urls: {
+			base: 'https://api3.binance.com/api/',
+			wapi: 'https://api3.binance.com/wapi/',
+			sapi: 'https://api3.binance.com/sapi/'
+		}
 	});
 	biaccounts.push(binanceacc);
 	teleaccounts.push(telegrammaccount);
 
 });
-// const binance = new Binance();
+
 var teleg = new telegram();
-// var settings = {}
+
+
 
 // google answer 302 so its normal
-const replicatorpost = bent('POST', 'string', server.replicatoranscode);
+const replicatorpost = bent('POST', 'string', config.replicatoranscode);
 
 // async url request 
 var requestAsync = function (url) {
@@ -317,11 +325,12 @@ app.post(config.signalpage, function (req, res) {
 	let r = '';
 
 	req.on('data', chunk => {
-		r = `${chunk}`
+		r = `${chunk}`;
 		console.log('-----------------');
 		console.log('requset >>');
 		console.log(r);
 	})
+
 	req.on('end', async () => {
 		// let logica = binancelogica(r,global);
 		// Необходимо принять сигнал с номером профиля.
@@ -344,7 +353,7 @@ app.post(config.replicatorurl, function (req, res) {
 
 	req.on('data', chunk => {
 		r = `${chunk}`
-		let now = new Date(Date.now() + 3 * 3600000);
+		let now = new Date(Date.now() + config.gmttime * 3600000);
 		let strnow = now.toLocaleString("ru-RU") + `.${now.getMilliseconds()}`;
 		console.log('[' + strnow + '] take replication to (' + config.urls.length + ') urls');
 		console.log('>> ' + r);
@@ -354,7 +363,6 @@ app.post(config.replicatorurl, function (req, res) {
 });
 
 // replicator v2 page
-
 app.post(config.replicator2url, function (req, res) {
 	if (req.params.repId == undefined || req.params.repId == "0") return res.send("fail");
 	let rid = Number(req.params.repId) - 1;
@@ -362,7 +370,7 @@ app.post(config.replicator2url, function (req, res) {
 
 	req.on('data', chunk => {
 		r = `${chunk}`
-		let now = new Date(Date.now() + 3 * 3600000);
+		let now = new Date(Date.now() + config.gmttime * 3600000);
 		let strnow = now.toLocaleString("ru-RU") + `.${now.getMilliseconds()}`;
 		console.log('[' + strnow + '] take replication v2 to (' + config.rep2urls[rid].length + ') urls');
 		console.log('>> ' + r);
@@ -372,23 +380,77 @@ app.post(config.replicator2url, function (req, res) {
 	return res.send("done");
 });
 
+// api connector
+
+app.post(config.apiproxypage, function (req, res) {
+	let resp = {};
+	let request = {};
+	let r = '';
+
+	req.on('data', chunk => {
+		r = `${chunk}`;
+		console.log('-----------------');
+		console.log('proxy >>');
+		console.log(r);
+	});
+
+	req.on('end', async () => {
+		try {
+			request = JSON.parse(r);
+		} catch {
+			// catch  json	
+			resp = {
+				"code": -1121,
+				"msg": "Invalid request."
+			};
+			console.log('400: bad request');
+			return res.status(400).send(resp);
+		}
+		console.log('response <<');
+		try {
+
+			let hdr = { 'X-MBX-APIKEY': request.mbx };
+			let binanceserver = bent(request.nodeproxymethod.toUpperCase(), 'string', hdr);
+			resp = await binanceserver(request.nodebinanceurl);
+
+		} catch (e) {
+
+			// catch  bent			
+			resp = resp.statusCode == 403 ? await e.text() : await e.json();
+			if (resp == undefined) {
+				resp = {
+					"code": -1121,
+					"msg": "Invalid request."
+				};
+			}
+
+		}
+
+		let statuscode = resp.statusCode == undefined ? 200 : resp.statusCode;
+		console.log(statuscode);
+		res.status(statuscode).send(resp);
+	});
+});
+
 // about page
 app.get('/about', function (req, res) {
 	res.render('pages/about');
 });
 
+// запуск сервера
 http.listen(config.httplistenport, function () {
 	console.log('listen signals on port:' + config.httplistenport);
-	console.log('signal page: '+config.signalpage);
+	console.log('signal page: ' + config.signalpage);
 });
 
-
-teleaccounts.forEach((telegrammaccount) => {
-	telegrammaccount.telegramSendText2("⚠️ Node Start", "Saltanat Bot Antares class v2.3 regrads to @tochk & @citra999 | founder: @arman_aubakirov");
+config.profiles.forEach((profile) => {
+	let telegrammaccount = new telegram(profile.telestatus, profile.teleid, profile.teletoken);
+	telegrammaccount.telegramSendText2("⚠️ Node Start", "Saltanat Bot Antares class v" + nodeversion + " regrads to @tochk & @citra999 | founder: @arman_aubakirov");
 	telegrammaccount.telegramSendBuffer();
-})
+});
 
 module.exports.binance = biaccounts[0];
 module.exports.teleg = teleg;
 module.exports.biaccounts = biaccounts;
 module.exports.teleaccounts = teleaccounts;
+

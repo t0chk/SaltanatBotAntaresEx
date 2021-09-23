@@ -1,51 +1,15 @@
-let binanceclass = require('./binancespot');
-let http = require('request');
-let server = require('./server');
+const config = require('./config.js');
+const binanceclass = require('./binancespot');
+const http = require('request');
+const telegram = require('./telegrammclass');
 
 
-// ////binance
-var binance = new binanceclass();
-binance.marketType = "spot";
-
-////margin
-var binanceMar = new binanceclass();
-binanceMar.marketType = "margin";
-
-///// binance futures REAL usdt
-var binanceFru = new binanceclass();
-binanceFru.typeExchange = "/fapi";
-binanceFru.marketType = "futures";
-
-///// binance futures real coin
-var binanceFro = new binanceclass();
-binanceFro.typeExchange = "/dapi";
-binanceFro.marketType = "futures";
-
-///// binance futures testnet usdt
-// var binanceFtu = new binancespot();
-// binanceFtu.typeExchange = "/fapi";
-// binanceFtu.marketType = "futures"
-// ///// binance futures testnet coin
-// var binanceFto = new binancespot();
-// binanceFto.typeExchange = "/dapi";
-// binanceFto.marketType = "futures"
-
-
-/////dict market 
-var marketDict = {
-    'binance': binance,
-    //   'binanceftu': binanceFtu,
-    //   'binancefto': binanceFto,
-    'binancefru': binanceFru,
-    'binancefro': binanceFro,
-    'binancemar': binanceMar
-}
-
-var obrabotka = async function (mesage, global, binanceaccidx=0) {
+var obrabotka = async function (mesage, accountticker, binanceaccidx = 0) {
     mesage = mesage.toLowerCase();
     let t = mesage.split("::");
     let binanceresp = {};
-    for (var i = 0; i < t.length; i++) {
+    let telegrammaccount = new telegram(config.profiles[binanceaccidx].telestatus, config.profiles[binanceaccidx].teleid, config.profiles[binanceaccidx].teletoken);
+    for (let i = 0; i < t.length; i++) {
 
         let massiv = t[i].split(';')
         let dictCommand = new Map()
@@ -53,9 +17,27 @@ var obrabotka = async function (mesage, global, binanceaccidx=0) {
             dictCommand[massiv[index].split('=')[0]] = massiv[index].split('=')[1]
         }
         if ((dictCommand['market'] != undefined)) {
-            let market = dictCommand['market'];
-            var marketClass = marketDict[market];
-            marketClass.updateParametr(binanceaccidx); // очищаем значения запроса для нового заполнения
+
+            let marketClass = new binanceclass();
+            switch (dictCommand['market'].toLowerCase()) {
+                case 'binancefru':
+                    marketClass.typeExchange = "/fapi";
+                    marketClass.marketType = "futures";
+                    break;
+                case 'binancefro':
+                    marketClass.typeExchange = "/dapi";
+                    marketClass.marketType = "futures";
+                    break;
+                case 'binancemar':
+                    marketClass.marketType = "margin";
+                    break;
+                default:
+                    marketClass.marketType = "spot";
+            }
+
+
+            // очищаем значения запроса для нового заполнения
+            marketClass.updateParametr(binanceaccidx);
             marketClass.filterStatus = true;
             if (dictCommand['symbol'] != undefined) {
                 marketClass.pair = dictCommand['symbol'].toUpperCase();
@@ -125,20 +107,22 @@ var obrabotka = async function (mesage, global, binanceaccidx=0) {
             if (dictCommand['activationprice'] != undefined) { marketClass.activationPrice = dictCommand['activationprice']; }
             if (dictCommand['quantityproc'] != undefined) { marketClass.quantityProc = dictCommand['quantityproc']; }
             if (dictCommand['leverageproc'] != undefined) { marketClass.leverageProc = dictCommand['leverageproc']; }
-            marketClass.global = global
-            // Запрос в Бинанс
-            server.teleaccounts[binanceaccidx].telegramSendText2("Request ⏩", t[i]);
-            binanceresp = await marketClass.binanceStart(binanceaccidx);
-            server.teleaccounts[binanceaccidx].telegramSendResponse("Response ⏪", binanceresp);
-            server.teleaccounts[binanceaccidx].telegramSendBuffer();
+            if (dictCommand['pause'] != undefined && Number(dictCommand['pause']) > 0) { await new Promise(resolve => setTimeout(resolve, Number(dictCommand['pause']))); }
 
-            // console.log('finaly answer');
-            // console.log(binanceresp);
+            marketClass.global = accountticker;
+            telegrammaccount.telegramSendText2("Request ⏩", t[i]);
+
+            // Запрос в Бинанс
+            binanceresp = await marketClass.binanceStart(binanceaccidx);
+
+            telegrammaccount.telegramSendResponse("Response ⏪", binanceresp);
+            telegrammaccount.telegramSendBuffer();
+
         } else {
             console.log('error market');
             binanceresp = { code: -9000, msg: 'Node error: Market command not defined' };
-            server.teleaccounts[binanceaccidx].telegramSendText2("😬 Error", "Market command not defined");
-            server.teleaccounts[binanceaccidx].telegramSendBuffer();
+            telegrammaccount.telegramSendText2("😬 Error", "Market command not defined");
+            telegrammaccount.telegramSendBuffer();
         }
     }
     return binanceresp;
