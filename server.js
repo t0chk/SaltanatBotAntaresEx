@@ -1,4 +1,4 @@
-var nodeversion = "2.5.0";
+var nodeversion = "2.5.2";
 
 var app = require('express')();
 var http = require('http').Server(app);

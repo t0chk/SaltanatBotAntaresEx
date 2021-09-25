@@ -241,7 +241,7 @@ class binanceClass {
     }
     ////закрытие всех ордеров спота по выбранной валютной пары
     async BinanceCloseAllOrderSpot() {
-        let r = this.binanceaccount.cancelAll(this.pair, (error, response) => {
+        let r = await this.binanceaccount.cancelAll(this.pair, (error, response) => {
             if (response.length == undefined) {
                 this.telegaccount.telegramSendText2("😬 Error", JSON.stringify(error.body));
                 return error.body;
@@ -252,11 +252,28 @@ class binanceClass {
         return r
     }
     async BinanceCloseOrderIdSpot() {
-        let r = this.binanceaccount.cancel(this.pair, this.orderId, (error, response, symbol) => {
+        let r = {};
+        let pair = this.pair;
+        // закрытие может быть по orderId или по origClientOrderId
+        if (this.origClientOrderId.length > 0) {
+            // надо узнавать
+            r = await this.binanceaccount.openOrders(this.pair);
+
+            let order = r.find(function (v, i, a) {
+                return v.symbol == this;
+            }, pair);
+
+            this.orderId = order.orderId == undefined ? 0 : order.orderId;
+
+
+        }
+        // надо знать orderID
+        r = this.binanceaccount.cancel(this.pair, this.orderId, (error, response, symbol) => {
             return response;
         });
         return r
     }
+
     // Информация о пользователе спот
     BinanceAccountInfoSpot() {
 
@@ -870,7 +887,7 @@ class binanceClass {
         server.dateStartRequest = new Date(Date.now() - config.gmttime * 3600000);
         this.binanceaccount = server.biaccounts[binanceaccidx];
         this.telegaccount = server.teleaccounts[binanceaccidx];
-        
+
         if (this.marketType == "spot") {
             this.binancefilterStartSpot();
             if (this.allClose != "false") {
@@ -945,7 +962,7 @@ class binanceClass {
         }
 
     }
-    
+
     binanceGetBestPrice() {
         // расписать все маркеты!
         switch (this.marketType) {
@@ -959,7 +976,7 @@ class binanceClass {
         }
     }
 
-    async binanceGetSymbolPrice(){
+    async binanceGetSymbolPrice() {
         let prices = await this.binanceaccount.prices(this.pair);
         return prices[this.pair];
     }
