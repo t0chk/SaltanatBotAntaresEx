@@ -1,6 +1,9 @@
 const config = require('./config.js');
 let server = require('./server');
 
+var binancespotcounter = 50;
+var binancefuturescounter = 300;
+
 class binanceClass {
     constructor(binanceaccidx = 0) {
         // api key 
@@ -162,32 +165,24 @@ class binanceClass {
         }
         this.param = param;
         let r = undefined
-        // Я не понимаю почему при покупке возвращается orderListId, а при продаже orderId
+
         if (this.side == "BUY") {
-            r = this.binanceaccount.buy(this.pair, this.quantity, this.price, this.param, (error, response) => {
-                if (response.orderListId == undefined) {
-                    this.telegaccount.telegramSendText2("😬 Error", JSON.stringify(error.body));
-                    return error.body;
-                } else {
-                    return response;
-                }
-            });
+            r = this.binanceaccount.buy(this.pair, this.quantity, this.price, this.param)
+                .catch((error) => {
+                    return JSON.parse(error.body);
+                });
         } else {
-            r = this.binanceaccount.sell(this.pair, this.quantity, this.price, this.param, (error, response) => {
-                if (response.orderId == undefined) {
-                    this.telegaccount.telegramSendText2("😬 Error", JSON.stringify(error.body));
-                    return error.body;
-                } else {
-                    return response;
-                }
-            });
+            r = this.binanceaccount.sell(this.pair, this.quantity, this.price, this.param)
+                .catch((error) => {
+                    return JSON.parse(error.body);
+                });
         }
         return r;
 
     }
 
     //////создание ордеров для спот
-    BinanceCreatOrderSpot() {
+    async BinanceCreatOrderSpot() {
 
         let param = {};
         param["type"] = this.type;
@@ -212,66 +207,42 @@ class binanceClass {
         }
         this.param = param
 
-        //console.log(this.param)
         let r = undefined
-        if (this.side == "BUY") {
-            r = this.binanceaccount.buy(this.pair, this.quantity, this.price, this.param, (error, response) => {
-                if (response.orderId == undefined) {
-                    this.telegaccount.telegramSendText2("😬 Error", JSON.stringify(error.body));
-                    return error.body;
-
-                } else {
-                    return response;
-                }
-            });
-        } else {
-            r = this.binanceaccount.sell(this.pair, this.quantity, this.price, this.param, (error, response) => {
-                if (response.orderId == undefined) {
-                    this.telegaccount.telegramSendText2("😬 Error", JSON.stringify(error.body));
-                    return error.body;
-
-                } else {
-                    return response;
-
-                }
-            });
-        }
+        r = this.side == "BUY" ? await this.binanceaccount.buy(this.pair, this.quantity, this.price, this.param) : await this.binanceaccount.sell(this.pair, this.quantity, this.price, this.param);
         return r
 
     }
     ////закрытие всех ордеров спота по выбранной валютной пары
     async BinanceCloseAllOrderSpot() {
-        let r = await this.binanceaccount.cancelAll(this.pair, (error, response) => {
-            if (response.length == undefined) {
-                this.telegaccount.telegramSendText2("😬 Error", JSON.stringify(error.body));
-                return error.body;
-            } else {
-                return response;
-            }
-        });
+        let r = await this.binanceaccount.cancelAll(this.pair)
+            .catch((error) => {
+                return JSON.parse(error.body);
+            });
         return r
     }
     async BinanceCloseOrderIdSpot() {
         let r = {};
-        let pair = this.pair;
+        let order = [];
+        let clientOrderId = this.origClientOrderId;
         // закрытие может быть по orderId или по origClientOrderId
         if (this.origClientOrderId.length > 0) {
-            // надо узнавать
             r = await this.binanceaccount.openOrders(this.pair);
-
-            let order = r.find(function (v, i, a) {
-                return v.symbol == this;
-            }, pair);
-
-            this.orderId = order.orderId == undefined ? 0 : order.orderId;
-
-
+            order = r.find(function (v, i, a) {
+                if (v.clientOrderId == undefined) return false;
+                return v.clientOrderId == this;
+            }, clientOrderId);
+            if (order == undefined) {
+                this.orderId = 0;
+            } else {
+                this.orderId = order.orderId == undefined ? 0 : order.orderId;
+            }
         }
         // надо знать orderID
-        r = this.binanceaccount.cancel(this.pair, this.orderId, (error, response, symbol) => {
-            return response;
-        });
-        return r
+        r = await this.binanceaccount.cancel(this.pair, this.orderId)
+            .catch((error) => {
+                return JSON.parse(error.body);
+            });
+        return r;
     }
 
     // Информация о пользователе спот
@@ -889,29 +860,28 @@ class binanceClass {
         this.telegaccount = server.teleaccounts[binanceaccidx];
 
         if (this.marketType == "spot") {
+
+            /* тут включается семафор и если счётчик показывает 0, то ждём одну секунду */
             this.binancefilterStartSpot();
             if (this.allClose != "false") {
                 if (this.allClose == "true") {
                     let r = await this.BinanceCloseAllOrderSpot();
-                    // this.updateParametr();
+
                     return r
                 } else if (this.allClose == "order") {
                     let r = await this.BinanceCloseOrderIdSpot();
-                    // this.updateParametr();
                     return r
                 }
 
             } else {
                 if (this.oco == "true") {
                     let r = await this.BinanceCreatOrderOcoSpot();
-                    // this.updateParametr();
                     return r
                 } else {
                     if (this.quantityProc != 0) {
                         this.BinanceQuantityProcSpot();
                     }
                     let r = await this.BinanceCreatOrderSpot();
-                    // this.updateParametr();
                     return r
                 }
 
@@ -920,6 +890,8 @@ class binanceClass {
         }
         // futures done
         else if (this.marketType == "futures") {
+
+            /* тут включается семафор и если счётчик показывает 0, то ждём одну секунду */
             if (this.typeExchange == "/dapi") {
                 this.binancefilterStartdapi();
             } else if (this.typeExchange == "/fapi") {

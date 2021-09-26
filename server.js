@@ -1,4 +1,4 @@
-var nodeversion = "2.5.2";
+var nodeversion = "2.5.4";
 
 var app = require('express')();
 var http = require('http').Server(app);
@@ -12,6 +12,7 @@ const config = require('./config.js');
 let telegram = require('./telegrammclass');
 const { exit } = require('process');
 const { profile } = require('console');
+const e = require('cors');
 
 var biaccounts = [];
 var tickers = {};
@@ -38,9 +39,9 @@ config.profiles.forEach((profile) => {
 	teleaccounts.push(telegrammaccount);
 
 });
-
+// const binance = new Binance();
 var teleg = new telegram();
-
+// var settings = {}
 
 
 // google answer 302 so its normal
@@ -130,7 +131,7 @@ async function loadExchangeInfo(binanceacc) {
 			console.log(error)
 		}
 	});
-
+	// старт фьючерсов. загрузка информации о бирже
 	let r = await binanceacc.futuresExchangeInfo();
 
 	let minimums = {};
@@ -196,11 +197,22 @@ async function loadExchangeInfo(binanceacc) {
 // первичная загрузка баланса
 
 async function loadbalance(binanceacc) {
-	let r = await binanceacc.deliveryBalance();
+	let r = await binanceacc.deliveryBalance()
+	.catch((error) => {
+		console.log('deliveryBalance error');
+		console.log(error);
+		exit(1);
+	});
 	for (el in r) {
 		binanceacc.saltanatticker.balance.futuresDapi[r[el].asset] = r[el]
 	}
-	r = await binanceacc.futuresBalance();
+	r = await binanceacc.futuresBalance()
+	.catch((error) => {
+		console.log('futuresBalance error');
+		console.log(error);
+		exit(1);
+	});
+
 	for (el in r) {
 		binanceacc.saltanatticker.balance.futures[r[el].asset] = r[el]
 	}
@@ -226,8 +238,8 @@ setInterval(() => {
 
 // вызов функции с первым ключем
 biaccounts.forEach((account) => {
-	loadExchangeInfo(account);
 
+	loadExchangeInfo(account);
 	// загрузка цены в global обновление значения в режиме онлайн
 	account.websockets.bookTickers(obj => {
 		account.saltanatticker.ticker.spot[obj.symbol] = obj;
@@ -379,8 +391,6 @@ app.post(config.replicator2url, function (req, res) {
 
 	return res.send("done");
 });
-
-// api connector
 
 app.post(config.apiproxypage, function (req, res) {
 	let resp = {};

@@ -2,7 +2,7 @@ const config = require('./config.js');
 let httprequest = require('request');
 
 class telegram {
-  constructor(status="выкл",id="",token="") {
+  constructor(status = "выкл", id = "", token = "") {
     this.token = token;
     this.id = id;
     this.url = 'https://api.telegram.org/bot' + token;
@@ -51,17 +51,18 @@ class telegram {
       this.textbuffer += "<b>" + strHeader + ": [" + strnow + "]</b>\n" + strText + "\n\n";
     }
   }
-  telegramSendResponse(strHeader, objJSONResp, boolStripJson = true){
-    let strAnswer=JSON.stringify(objJSONResp, null, '🔸');
+  telegramSendResponse(strHeader, objJSONResp, boolStripJson = true) {
+    let strAnswer = JSON.stringify(objJSONResp, null, '🔸');
+    strAnswer = strAnswer == undefined ? "" : strAnswer;
     if (boolStripJson) {
       strAnswer = strAnswer.replace(/"([^"]+(?="))"/g, '$1');
       strAnswer = strAnswer.replace("{\n", "");
       strAnswer = strAnswer.replace("{", "");
       strAnswer = strAnswer.replace("}", "");
     }
-    this.telegramSendText2(strHeader,strAnswer);
+    this.telegramSendText2(strHeader, strAnswer);
   }
-  
+
   telegramRequestSend(dateStartTime, strRequestHeader, strRequest, dateEndTime, strAnswerHeader, strAnswer, boolStripJson = true) {
     if (this.status == "вкл" && !this.mute) {
       if (boolStripJson) {
