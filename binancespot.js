@@ -12,7 +12,7 @@ class binanceClass {
 
         // аккаунт binance для работы
         this.binanceaccount = server.biaccounts[binanceaccidx];
-
+        this.global = server.biaccounts[binanceaccidx].saltanatticker;
         this.orderId = 0
         this.priceprocdown = undefined
         this.priceprocup = undefined
@@ -208,7 +208,14 @@ class binanceClass {
         this.param = param
 
         let r = undefined
-        r = this.side == "BUY" ? await this.binanceaccount.buy(this.pair, this.quantity, this.price, this.param) : await this.binanceaccount.sell(this.pair, this.quantity, this.price, this.param);
+        r = this.side == "BUY" ? await this.binanceaccount.buy(this.pair, this.quantity, this.price, this.param)
+            .catch((error) => {
+                return JSON.parse(error.body);
+            })
+            : await this.binanceaccount.sell(this.pair, this.quantity, this.price, this.param)
+                .catch((error) => {
+                    return JSON.parse(error.body);
+                });
         return r
 
     }
@@ -643,10 +650,10 @@ class binanceClass {
         }
 
         if (this.filterStatus) {
-            this.tickSize = this.global.filters.spot[this.pair]['tickSize'];
-            this.stepSize = this.global.filters.spot[this.pair]['stepSize'];
-            this.baseAsset = this.global.filters.spot[this.pair]['baseAsset'];
-            this.quoteAsset = this.global.filters.spot[this.pair]['quoteAsset'];
+            this.tickSize = server.globalexchangeinfo.filters.spot[this.pair]['tickSize'];
+            this.stepSize = server.globalexchangeinfo.filters.spot[this.pair]['stepSize'];
+            this.baseAsset = server.globalexchangeinfo.filters.spot[this.pair]['baseAsset'];
+            this.quoteAsset = server.globalexchangeinfo.filters.spot[this.pair]['quoteAsset'];
             // начало фильтрации цена по правилам биржы
 
             this.tickSize = Number(this.tickSize).toFixed(8);
@@ -723,10 +730,10 @@ class binanceClass {
 
         if (this.filterStatus) {
 
-            this.tickSize = this.global.filters.futures[this.pair]['tickSize'];
-            this.stepSize = this.global.filters.futures[this.pair]['stepSize'];
-            this.baseAsset = this.global.filters.futures[this.pair]['baseAsset'];
-            this.quoteAsset = this.global.filters.futures[this.pair]['quoteAsset'];
+            this.tickSize = server.globalexchangeinfo.filters.futures[this.pair]['tickSize'];
+            this.stepSize = server.globalexchangeinfo.filters.futures[this.pair]['stepSize'];
+            this.baseAsset = server.globalexchangeinfo.filters.futures[this.pair]['baseAsset'];
+            this.quoteAsset = server.globalexchangeinfo.filters.futures[this.pair]['quoteAsset'];
             // начало фильтрации цена по правилам биржы
             this.tickSize = Number(this.tickSize).toFixed(8);
             let dot = (this.tickSize).indexOf('.');
@@ -800,13 +807,13 @@ class binanceClass {
         }
 
         if (this.filterStatus) {
-            this.tickSize = this.global.filters.futuresDapi[this.pair]['tickSize'];
-            this.stepSize = this.global.filters.futuresDapi[this.pair]['stepSize'];
-            this.baseAsset = this.global.filters.futuresDapi[this.pair]['baseAsset'];
-            this.quoteAsset = this.global.filters.futuresDapi[this.pair]['quoteAsset'];
+            this.tickSize = server.globalexchangeinfo.filters.futuresDapi[this.pair]['tickSize'];
+            this.stepSize = server.globalexchangeinfo.filters.futuresDapi[this.pair]['stepSize'];
+            this.baseAsset = server.globalexchangeinfo.filters.futuresDapi[this.pair]['baseAsset'];
+            this.quoteAsset = server.globalexchangeinfo.filters.futuresDapi[this.pair]['quoteAsset'];
             // начало фильтрации цена по правилам биржы
             if (this.typeExchange == '/dapi') {
-                this.contractSize = this.global.filters.futuresDapi[this.pair]['contractSize'];
+                this.contractSize = server.globalexchangeinfo.filters.futuresDapi[this.pair]['contractSize'];
             }
             this.tickSize = Number(this.tickSize).toFixed(8);
             let dot = (this.tickSize).indexOf('.');
@@ -857,6 +864,7 @@ class binanceClass {
     async binanceStart(binanceaccidx = 0) {
         server.dateStartRequest = new Date(Date.now() - config.gmttime * 3600000);
         this.binanceaccount = server.biaccounts[binanceaccidx];
+        this.global = server.biaccounts[binanceaccidx].saltanatticker;
         this.telegaccount = server.teleaccounts[binanceaccidx];
 
         if (this.marketType == "spot") {
@@ -898,7 +906,7 @@ class binanceClass {
                 this.binancefilterStartfapi()
             }
             if (this.leverage != 0) {
-                // плечо
+                // изменить плечо на требуемое
                 let r = this.BinanceLeverageFutures();
             }
 

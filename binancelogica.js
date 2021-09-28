@@ -3,7 +3,6 @@ const binanceclass = require('./binancespot');
 const http = require('request');
 const telegram = require('./telegrammclass');
 
-
 var obrabotka = async function (mesage, accountticker, binanceaccidx = 0) {
     mesage = mesage.toLowerCase();
     let t = mesage.split("::");
@@ -17,6 +16,9 @@ var obrabotka = async function (mesage, accountticker, binanceaccidx = 0) {
             dictCommand[massiv[index].split('=')[0]] = massiv[index].split('=')[1]
         }
         if ((dictCommand['market'] != undefined)) {
+            // определяем класс для работы
+            //let market = dictCommand['market'];
+            // var marketClass = marketDict[market];
 
             let marketClass = new binanceclass();
             switch (dictCommand['market'].toLowerCase()) {
@@ -35,9 +37,10 @@ var obrabotka = async function (mesage, accountticker, binanceaccidx = 0) {
                     marketClass.marketType = "spot";
             }
 
-
+            
             // очищаем значения запроса для нового заполнения
             marketClass.updateParametr(binanceaccidx);
+            // marketClass.global = accountticker;
             marketClass.filterStatus = true;
             if (dictCommand['symbol'] != undefined) {
                 marketClass.pair = dictCommand['symbol'].toUpperCase();
@@ -109,7 +112,6 @@ var obrabotka = async function (mesage, accountticker, binanceaccidx = 0) {
             if (dictCommand['leverageproc'] != undefined) { marketClass.leverageProc = dictCommand['leverageproc']; }
             if (dictCommand['pause'] != undefined && Number(dictCommand['pause']) > 0) { await new Promise(resolve => setTimeout(resolve, Number(dictCommand['pause']))); }
 
-            marketClass.global = accountticker;
             telegrammaccount.telegramSendText2("Request ⏩", t[i]);
 
             // Запрос в Бинанс

@@ -1,4 +1,4 @@
-var nodeversion = "2.5.4";
+var nodeversion = "2.6.1";
 
 var app = require('express')();
 var http = require('http').Server(app);
@@ -15,7 +15,7 @@ const { profile } = require('console');
 const e = require('cors');
 
 var biaccounts = [];
-var tickers = {};
+var globalexchangeinfo = {};
 var teleaccounts = [];
 
 console.info('loading binace profiles');
@@ -50,53 +50,50 @@ const replicatorpost = bent('POST', 'string', config.replicatoranscode);
 // async url request 
 var requestAsync = function (url) {
 	return new Promise((resolve, reject) => {
-		var req = replicatorpost(url, Buffer.from(this.post), { 'Content-Type': 'text/plain' });
+		var req = replicatorpost(url, Buffer.from(this.post), { 'Content-Type': 'text/plain' })
+			.catch(error => {
+				console.log(error);
+			});
 	})
 };
 
 var getParallel = async function (urldata, postdata) {
 	//transform requests into Promises, await all
 	try {
-		// remove await from Promise.all
-		var data = Promise.all(urldata.map(requestAsync, { post: postdata }));
-		// var data = await replicatorpost(urldata[0], Buffer.from(postdata),{'Content-Type' : 'text/plain'});
+		Promise.all(urldata.map(requestAsync, { post: postdata }));
 	} catch (err) {
+		// catch bent error
 		console.error(err);
 	}
-	// console.log(data);
 }
 
 // общая библиотека где есть текущие цены и фильтры
-// teleg.url = 'https://api.telegram.org/bot' + teleg.token;
-tickers.ticker = {};
-tickers.ticker.spot = {};
-tickers.ticker.futures = {};
-tickers.ticker.futuresDapi = {};
-tickers.stat = {};
-tickers.stat['por'] = 1;
-tickers.balance = {};
-tickers.balance.spot = {};
-tickers.balance.futures = {};
-tickers.balance.futuresDapi = {};
 
-// exchange info
-// global.settingsTime = settings.time
+globalexchangeinfo.ticker = {};
+globalexchangeinfo.ticker.spot = {};
+globalexchangeinfo.ticker.futures = {};
+globalexchangeinfo.ticker.futuresDapi = {};
 
-tickers.filters = {}
+globalexchangeinfo.stat = {};
+globalexchangeinfo.stat['por'] = 1;
 
-tickers.filters.spot = {}
-tickers.filters.futures = {}
-tickers.filters.futuresDapi = {}
+globalexchangeinfo.balance = {};
+globalexchangeinfo.balance.spot = {};
+globalexchangeinfo.balance.futures = {};
+globalexchangeinfo.balance.futuresDapi = {};
+
+globalexchangeinfo.filters = {}
+globalexchangeinfo.filters.spot = {}
+globalexchangeinfo.filters.futures = {}
+globalexchangeinfo.filters.futuresDapi = {}
 
 
-//   загрузка фильтра  для спот в global а также ежедневная обновление значений
-//   в мультиакке берется первый ключ, для загрузки фильтров!
-//   это может быть потенциальной проблемой, т.к. ключи могут быть совершенно разными
-//   рекомендуется первый ключ ставить с подключенными и фьючерсами и спотом
 
 async function loadExchangeInfo(binanceacc) {
-	binanceacc.saltanatticker = tickers;
-	binanceacc.exchangeInfo(function (error, data) {
+	// ОБРАБОТАТЬ ОТКАЗЫ СОЕДИНЕНИЯ
+
+	console.log('loadExchangeInfo: load global filter');
+	await binanceacc.exchangeInfo(function (error, data) {
 		let minimums = {};
 		if (error == null) {
 			for (let obj of data.symbols) {
@@ -126,13 +123,24 @@ async function loadExchangeInfo(binanceacc) {
 				filters.icebergAllowed = obj.icebergAllowed;
 				minimums[obj.symbol] = filters;
 			}
-			binanceacc.saltanatticker.filters.spot = minimums
+
+			// Фильтры для спота
+			globalexchangeinfo.filters.spot = minimums
 		} else {
-			console.log(error)
+			console.log('loadExchangeInfo: fail to load global filter ');
+			console.log(error);
+			exit(0);
 		}
 	});
+
 	// старт фьючерсов. загрузка информации о бирже
-	let r = await binanceacc.futuresExchangeInfo();
+	console.log('loadExchangeInfo: load futures filter');
+	let r = await binanceacc.futuresExchangeInfo()
+		.catch(error => {
+			console.log('loadExchangeInfo: fail to load futures filter ');
+			console.log(error);
+			exit(0);
+		});
 
 	let minimums = {};
 	for (let obj of r.symbols) {
@@ -160,9 +168,17 @@ async function loadExchangeInfo(binanceacc) {
 		filters.icebergAllowed = obj.icebergAllowed;
 		minimums[obj.symbol] = filters;
 	}
-	binanceacc.saltanatticker.filters.futures = minimums
 
-	r = await binanceacc.deliveryExchangeInfo();
+	// Фильтры для фьючерсов
+	globalexchangeinfo.filters.futures = minimums;
+
+	console.log('loadExchangeInfo: load futures delivery filter');
+	r = await binanceacc.deliveryExchangeInfo()
+		.catch(error => {
+			console.log('loadExchangeInfo: fail to load delivery futures filter ');
+			console.log(error);
+			exit(0);
+		});
 	minimums = {};
 	for (let obj of r.symbols) {
 		let filters = { status: obj.status };
@@ -190,63 +206,36 @@ async function loadExchangeInfo(binanceacc) {
 		filters.icebergAllowed = obj.icebergAllowed;
 		minimums[obj.symbol] = filters;
 	}
-	binanceacc.saltanatticker.filters.futuresDapi = minimums;
+	// Фильтры для деливери
+	globalexchangeinfo.filters.futuresDapi = minimums;
 
 }
 
 // первичная загрузка баланса
 
-async function loadbalance(binanceacc) {
-	let r = await binanceacc.deliveryBalance()
-	.catch((error) => {
-		console.log('deliveryBalance error');
-		console.log(error);
-		exit(1);
-	});
-	for (el in r) {
-		binanceacc.saltanatticker.balance.futuresDapi[r[el].asset] = r[el]
-	}
-	r = await binanceacc.futuresBalance()
-	.catch((error) => {
-		console.log('futuresBalance error');
-		console.log(error);
-		exit(1);
-	});
+if (biaccounts.length > 0) {
+	// await new Promise(resolve => setTimeout(resolve, 2000));
+	(async () => {
+		await new Promise(resolve => loadExchangeInfo(biaccounts[0]));
+	})();
 
-	for (el in r) {
-		binanceacc.saltanatticker.balance.futures[r[el].asset] = r[el]
-	}
-
-	binanceacc.balance((error, balances) => {
-		if (error) {
-			console.error(error);
-		} else {
-			binanceacc.saltanatticker.balance.spot = balances
-			console.log('--------------------');
-			console.log('loading spot balances for');
-			console.log(binanceacc.getOptions().APIKEY);
-			console.log('--------------------');
-		}
-	});
+	setInterval(() => {
+		loadExchangeInfo(biaccounts[0]);
+	}, 86400000);
 }
 
-setInterval(() => {
-	biaccounts.forEach((account) => {
-		loadExchangeInfo(account);
-	});
-}, 86400000);
 
-// вызов функции с первым ключем
-biaccounts.forEach((account) => {
-
-	loadExchangeInfo(account);
+// Загрузка балансов для всех аккаунтов
+biaccounts.forEach(async function (account) {
+	console.log('starting key');
+	console.log(account.getOptions().APIKEY);
+	account.saltanatticker = globalexchangeinfo;
+	await account.useServerTime();
 	// загрузка цены в global обновление значения в режиме онлайн
+
 	account.websockets.bookTickers(obj => {
 		account.saltanatticker.ticker.spot[obj.symbol] = obj;
 	});
-
-
-
 
 	account.futuresBookTickerStream(obj => {
 		account.saltanatticker.ticker.futures[obj.symbol] = obj;
@@ -258,57 +247,91 @@ biaccounts.forEach((account) => {
 
 	});
 
-
 	io.sockets.on('connection', function (socket) {
 		io.sockets.emit('spotTicker', { spotTicker: account.saltanatticker.ticker.spot.BNBUSDT })
 		io.sockets.emit('futuresTickerDapi', { futuresTickerDapi: account.saltanatticker.ticker.futuresDapi.BNBUSD_210625 })
-
 		io.sockets.emit('futuresTicker', { futuresTicker: account.saltanatticker.ticker.futures.BNBUSDT })
-
 		io.sockets.emit('spotBalance', { spotBalance: account.saltanatticker.balance.spot })
-
-
 		io.sockets.emit('fapiBalance', { fapiBalance: account.saltanatticker.balance.futures })
-
 		io.sockets.emit('dapiBalance', { dapiBalance: account.saltanatticker.balance.futuresDapi })
-
 
 		socket.on('disconnect', function () {
 			io.sockets.emit('spotTicker', { spotTicker: "ss" })
-			console.log('disconnect')
+			console.log('disconnect');
 		})
 	})
 
 
 	// загрузка баланса кошелька
 	// баланс загружается в global что в корне неверно. необходимо переработать под возврат значений и грузить в глобал массив балансов
-	loadbalance(account);
 
-	account.websockets.userDeliveryData(false,
-		(bal) => {
-			for (el in bal.updateData.balances) {
-				account.saltanatticker.balance.futuresDapi[bal.updateData.balances[el].asset].balance = bal.updateData.balances[el].walletBalance
-				account.saltanatticker.balance.futuresDapi[bal.updateData.balances[el].asset].crossWalletBalance = bal.updateData.balances[el].crossWalletBalance
+	// await loadbalance(account);
+
+	let r = {};
+
+	r = await account.deliveryBalance()
+		.then(
+			async function (result) {
+				console.log('deliveryBalance sucess');
+				await account.websockets.userDeliveryData(false,
+					(bal) => {
+						for (el in bal.updateData.balances) {
+							account.saltanatticker.balance.futuresDapi[bal.updateData.balances[el].asset].balance = bal.updateData.balances[el].walletBalance
+							account.saltanatticker.balance.futuresDapi[bal.updateData.balances[el].asset].crossWalletBalance = bal.updateData.balances[el].crossWalletBalance
+						}
+					},
+					false,
+					false
+				);
+
+			},
+			async function (error) {
+				console.log('deliveryBalance error');
+				console.log(error);
 			}
-		},
-		false,
-		false
-	)
+		);
 
+	for (el in r) {
+		account.saltanatticker.balance.futuresDapi[r[el].asset] = r[el];
+	}
 
-	account.websockets.userFutureData(
-		false,
-		(bal) => {
-			for (el in bal.updateData.balances) {
-				account.saltanatticker.balance.futures[bal.updateData.balances[el].asset].balance = bal.updateData.balances[el].walletBalance
-				account.saltanatticker.balance.futures[bal.updateData.balances[el].asset].crossWalletBalance = bal.updateData.balances[el].crossWalletBalance
+	r = await account.futuresBalance()
+		.then(
+			async function (result) {
+				console.log('futuresBalance sucess');
+				await account.websockets.userFutureData(
+					false,
+					(bal) => {
+						for (el in bal.updateData.balances) {
+							account.saltanatticker.balance.futures[bal.updateData.balances[el].asset].balance = bal.updateData.balances[el].walletBalance
+							account.saltanatticker.balance.futures[bal.updateData.balances[el].asset].crossWalletBalance = bal.updateData.balances[el].crossWalletBalance
+						}
+					},
+					false,
+					false
+				);
+
+			},
+			async function (error) {
+				console.log('futuresBalance error');
+				console.log(error);
 			}
-		},
-		false,
-		false
-	);
+		);
+	for (el in r) {
+		account.saltanatticker.balance.futures[r[el].asset] = r[el]
+	}
 
-	account.websockets.userData((bal) => {
+	account.balance((error, balances) => {
+		if (error) {
+			console.log('loading balance error');
+			console.error(error);
+		} else {
+			console.log('spot loading balance success');
+			account.saltanatticker.balance.spot = balances;
+		}
+	});
+
+	await account.websockets.userData((bal) => {
 
 		for (el in bal.B) {
 			account.saltanatticker.balance.spot[bal.B[el].a].available = bal.B[el].f
@@ -319,6 +342,7 @@ biaccounts.forEach((account) => {
 		false,
 		false
 	)
+
 });
 ///////////////////////////////////
 
@@ -338,9 +362,13 @@ app.post(config.signalpage, function (req, res) {
 
 	req.on('data', chunk => {
 		r = `${chunk}`;
+		
+		let now = new Date(Date.now() + config.gmttime * 3600000);
+		let strnow = now.toLocaleString("ru-RU") + `.${now.getMilliseconds()}`;
+
 		console.log('-----------------');
-		console.log('requset >>');
-		console.log(r);
+		console.log('[' + strnow +'] request >>');
+		console.log('>> ' + r);
 	})
 
 	req.on('end', async () => {
@@ -351,7 +379,12 @@ app.post(config.signalpage, function (req, res) {
 		if (req.params.profId == undefined || req.params.profId == "0") return res.send("fail");
 		let pid = Number(req.params.profId) - 1;
 		if (pid >= biaccounts.length) return res.send("fail");
-		logica = await binancelogica(r, biaccounts[pid].saltanatticker, pid);
+		// biaccounts[pid].saltanatticker - передача общей информации в функцию!
+		// фактически она не нужна в виде свойства
+		logica = await binancelogica(r, biaccounts[pid].saltanatticker, pid)
+			.catch(error => {
+				console.log(error);
+			});
 		console.log('-----------------');
 		console.log('response <<');
 		console.log(logica);
@@ -448,10 +481,16 @@ app.get('/about', function (req, res) {
 });
 
 // запуск сервера
-http.listen(config.httplistenport, function () {
-	console.log('listen signals on port:' + config.httplistenport);
-	console.log('signal page: ' + config.signalpage);
-});
+try {
+	http.listen(config.httplistenport, function () {
+		console.log('listen signals on port:' + config.httplistenport);
+		console.log('signal page: ' + config.signalpage);
+	});
+} catch (e) {
+	console.log('error start webserver');
+	console.log(e);
+	exit(0);
+}
 
 config.profiles.forEach((profile) => {
 	let telegrammaccount = new telegram(profile.telestatus, profile.teleid, profile.teletoken);
@@ -463,4 +502,5 @@ module.exports.binance = biaccounts[0];
 module.exports.teleg = teleg;
 module.exports.biaccounts = biaccounts;
 module.exports.teleaccounts = teleaccounts;
+module.exports.globalexchangeinfo = globalexchangeinfo;
 
