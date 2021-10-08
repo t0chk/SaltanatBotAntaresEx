@@ -957,8 +957,10 @@ class binanceClass {
     }
 
     async binanceGetSymbolPrice() {
-        let prices = await this.binanceaccount.prices(this.pair);
-        return prices[this.pair];
+        let pair = this.pair;
+        if (Number(pair.substr(0, 4)) == 1000) { pair = pair.substr(4); }
+        let prices = await this.binanceaccount.prices(pair);
+        return Number(this.pair.substr(0, 4)) == 1000 ? prices[pair]*1000 : prices[pair];
     }
 
 }
