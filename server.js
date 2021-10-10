@@ -1,4 +1,4 @@
-var nodeversion = "2.6.1";
+var nodeversion = "2.7.1";
 
 var app = require('express')();
 var http = require('http').Server(app);
@@ -51,8 +51,9 @@ const replicatorpost = bent('POST', 'string', config.replicatoranscode);
 var requestAsync = function (url) {
 	return new Promise((resolve, reject) => {
 		var req = replicatorpost(url, Buffer.from(this.post), { 'Content-Type': 'text/plain' })
-			.catch(error => {
-				console.log(error);
+			.catch((e) => {
+				console.log('<< url: ',url);
+				console.log('<< ans code:', e.code,'/',e.errno);
 			});
 	})
 };
@@ -273,6 +274,9 @@ biaccounts.forEach(async function (account) {
 		.then(
 			async function (result) {
 				console.log('deliveryBalance sucess');
+				for (el in result) {
+					account.saltanatticker.balance.futuresDapi[result[el].asset] = result[el];
+				}
 				await account.websockets.userDeliveryData(false,
 					(bal) => {
 						for (el in bal.updateData.balances) {
@@ -291,14 +295,15 @@ biaccounts.forEach(async function (account) {
 			}
 		);
 
-	for (el in r) {
-		account.saltanatticker.balance.futuresDapi[r[el].asset] = r[el];
-	}
-
-	r = await account.futuresBalance()
+	account.futuresBalance()
 		.then(
 			async function (result) {
 				console.log('futuresBalance sucess');
+				for (el in result) {
+					account.saltanatticker.balance.futures[result[el].asset] = result[el];
+				}
+
+				// callback при изменении баланса?
 				await account.websockets.userFutureData(
 					false,
 					(bal) => {
@@ -317,9 +322,6 @@ biaccounts.forEach(async function (account) {
 				console.log(error);
 			}
 		);
-	for (el in r) {
-		account.saltanatticker.balance.futures[r[el].asset] = r[el]
-	}
 
 	account.balance((error, balances) => {
 		if (error) {
@@ -362,14 +364,14 @@ app.post(config.signalpage, function (req, res) {
 
 	req.on('data', chunk => {
 		r = `${chunk}`;
-		
+
 		let now = new Date(Date.now() + config.gmttime * 3600000);
 		let strnow = now.toLocaleString("ru-RU") + `.${now.getMilliseconds()}`;
 
 		console.log('-----------------');
-		console.log('[' + strnow +'] request >>');
+		console.log('[' + strnow + '] request >>');
 		console.log('>> ' + r);
-	})
+	});
 
 	req.on('end', async () => {
 		// let logica = binancelogica(r,global);
@@ -381,7 +383,7 @@ app.post(config.signalpage, function (req, res) {
 		if (pid >= biaccounts.length) return res.send("fail");
 		// biaccounts[pid].saltanatticker - передача общей информации в функцию!
 		// фактически она не нужна в виде свойства
-		logica = await binancelogica(r, biaccounts[pid].saltanatticker, pid)
+		logica = await binancelogica(r, pid)
 			.catch(error => {
 				console.log(error);
 			});
@@ -389,7 +391,7 @@ app.post(config.signalpage, function (req, res) {
 		console.log('response <<');
 		console.log(logica);
 		res.jsonp(logica);
-	})
+	});
 
 });
 
@@ -425,6 +427,7 @@ app.post(config.replicator2url, function (req, res) {
 	return res.send("done");
 });
 
+// proxy 
 app.post(config.apiproxypage, function (req, res) {
 	let resp = {};
 	let request = {};

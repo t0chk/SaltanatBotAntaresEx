@@ -3,9 +3,9 @@ const binanceclass = require('./binancespot');
 const http = require('request');
 const telegram = require('./telegrammclass');
 
-var obrabotka = async function (mesage, accountticker, binanceaccidx = 0) {
-    mesage = mesage.toLowerCase();
-    let t = mesage.split("::");
+var obrabotka = async function (msg, binanceaccidx = 0) {
+    msg = msg.toLowerCase();
+    let t = msg.split("::");
     let binanceresp = {};
     let telegrammaccount = new telegram(config.profiles[binanceaccidx].telestatus, config.profiles[binanceaccidx].teleid, config.profiles[binanceaccidx].teletoken);
     for (let i = 0; i < t.length; i++) {
@@ -113,12 +113,13 @@ var obrabotka = async function (mesage, accountticker, binanceaccidx = 0) {
             if (dictCommand['pause'] != undefined && Number(dictCommand['pause']) > 0) { await new Promise(resolve => setTimeout(resolve, Number(dictCommand['pause']))); }
 
             telegrammaccount.telegramSendText2("Request ⏩", t[i]);
-
+            
             // Запрос в Бинанс
             binanceresp = await marketClass.binanceStart(binanceaccidx);
 
             telegrammaccount.telegramSendResponse("Response ⏪", binanceresp);
             telegrammaccount.telegramSendBuffer();
+
 
         } else {
             console.log('error market');
